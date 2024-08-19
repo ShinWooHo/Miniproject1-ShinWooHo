@@ -32,7 +32,7 @@ public class miniproject1_1 {
 			exit();
 		}
 	}
-
+	
 	public void mainMenu() {
 		while (true) {
 			System.out.println("-------------------");
