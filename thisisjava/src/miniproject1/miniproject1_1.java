@@ -21,18 +21,16 @@ public class miniproject1_1 {
 	// 데이터베이스 연결 설정
 	public static void setupDatabase() {
 		try {
-			// JDBC 드라이버 등록
 			Class.forName("oracle.jdbc.OracleDriver");
-
-			// 데이터베이스 연결
 			conn = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521/xe", "user01", "1004");
-
+			if (conn != null && !conn.isClosed()) {
+				System.out.println("DB 연결 성공");
+			}
 		} catch (Exception e) {
 			e.printStackTrace();
-			exit();
 		}
 	}
-	
+
 	public void mainMenu() {
 		while (true) {
 			System.out.println("-------------------");
@@ -251,6 +249,7 @@ public class miniproject1_1 {
 				updatePstmt.setString(1, mid);
 
 				int rowsUpdated = updatePstmt.executeUpdate();
+				// 로그인 시간 업데이트
 				System.out.println("업데이트된 행 수: " + rowsUpdated);
 
 				conn.commit(); // 변경사항 커밋
@@ -342,6 +341,7 @@ public class miniproject1_1 {
 			case "3" -> {
 				if ("ROLE_ADMIN".equals(mrole)) {
 					viewAllMember();
+					System.out.println();
 				} else {
 					logout(currentUser);
 				}
@@ -355,20 +355,22 @@ public class miniproject1_1 {
 			}
 			case "5" -> {
 				if ("ROLE_ADMIN".equals(mrole)) {
-					exit();
+					// 관리자 권한으로 비밀번호 없이 비활성화
+					exit(); // 현재 로그인한 사용자를 비활성화
 				} else {
-					DeleteMember(currentUser);
+					// 사용자 권한으로 자신의 비밀번호 확인 후 비활성화
+					System.out.print("비밀번호를 입력해 주세요.");
+					String mpassword = sc.nextLine();
+					DeleteMember(currentUser, mpassword);
 				}
 			}
 			case "6" -> {
 				if ("ROLE_ADMIN".equals(mrole)) {
-					DeleteMember(currentUser);
+					// 관리자 권한으로 비밀번호 없이 비활성화
+					DeleteMember(currentUser, null); // 현재 로그인한 사용자를 비활성화
 				} else {
-					System.out.print("아이디를 입력해 주세요.");
-					String mid = sc.nextLine();
-					System.out.print("비밀번호를 입력해 주세요.");
-					String mpassword = sc.nextLine();
-					loginRePassword(mid, mpassword);
+					// 사용자 권한으로 자신의 비밀번호 확인 후 비활성화
+					System.out.println("잘못 입력하셨스빈다.");
 				}
 			}
 			case "7" -> {
@@ -406,32 +408,34 @@ public class miniproject1_1 {
 
 			if (rs.next()) {
 				// 비밀번호 확인
-				if (rs.getString("mpassword").equals(oldpassword)) {
-					System.out.println("비밀번호가 확인되었습니다.");
-
-					// 정보 수정 쿼리
-					String updateSql = "UPDATE member SET mpassword = ?, mname = ?, mtel = ?, maddress = ?, mrole = ? WHERE mid = ?";
-					PreparedStatement updatePstmt = conn.prepareStatement(updateSql);
-					updatePstmt.setString(1, newpassword); // 새로운 비밀번호
-					updatePstmt.setString(2, mname); // 새 이름
-					updatePstmt.setString(3, mtel); // 새 전화번호
-					updatePstmt.setString(4, maddress); // 새 주소
-					updatePstmt.setString(5, mrole); // 새 권한
-					updatePstmt.setString(6, currentUser); // 사용자 ID
-
-					int rowsUpdated = updatePstmt.executeUpdate();
-					if (rowsUpdated > 0) {
-						System.out.println("회원 정보를 수정했습니다.");
-					} else {
-						System.out.println("회원 정보 수정에 실패했습니다.");
-					}
-					updatePstmt.close();
-				} else {
+				if (!rs.getString("mpassword").equals(oldpassword)) {
 					System.out.println("현재 비밀번호가 일치하지 않습니다.");
+					return;
+				} else {
+					System.out.println("비밀번호가 확인되었습니다.");
 				}
 			} else {
 				System.out.println("사용자를 찾을 수 없습니다.");
+				return;
 			}
+			// 정보 수정 쿼리
+			String updateSql = "UPDATE member SET mpassword = ?, mname = ?, mtel = ?, maddress = ?, mrole = ? WHERE mid = ?";
+			PreparedStatement updatePstmt = conn.prepareStatement(updateSql);
+			updatePstmt.setString(1, newpassword); // 새로운 비밀번호
+			updatePstmt.setString(2, mname); // 새 이름
+			updatePstmt.setString(3, mtel); // 새 전화번호
+			updatePstmt.setString(4, maddress); // 새 주소
+			updatePstmt.setString(5, mrole); // 새 권한
+			updatePstmt.setString(6, currentUser); // 사용자 ID
+
+			int rowsUpdated = updatePstmt.executeUpdate();
+			if (rowsUpdated > 0) {
+				System.out.println("회원 정보를 수정했습니다.");
+			} else {
+				System.out.println("회원 정보 수정에 실패했습니다.");
+			}
+			updatePstmt.close();
+
 			rs.close();
 			selectPstmt.close();
 		} catch (Exception e) {
@@ -463,8 +467,8 @@ public class miniproject1_1 {
 		}
 	}
 
-	// 2.게시물 목록
-	public static void BoardRead(int pageNumber, int pageSize) {
+	// 2.게시물 목록 pageNumber - 페이지 번호, pageSize - 게시물 수
+	public static boolean BoardRead(int pageNumber, int pageSize) {
 		System.out.println("[게시물 목록]");
 
 		try {
@@ -477,12 +481,21 @@ public class miniproject1_1 {
 					+ "        SELECT bno, btitle, bwriter, bcontent, bcreatedat, bupdatedat, bhitcount, benabled "
 					+ "        FROM board " + "        WHERE benabled = 1 " + "        ORDER BY bcreatedat ASC "
 					+ "    ) " + "    WHERE rownum <= ? " + ") " + "WHERE rn >= ?";
+
 			PreparedStatement pstmt = conn.prepareStatement(sql);
 			pstmt.setInt(1, endRow);
 			pstmt.setInt(2, startRow);
 
 			ResultSet rs = pstmt.executeQuery();
 
+			// 결과가 없으면 페이지에 데이터가 없는 경우 처리
+			if (!rs.isBeforeFirst()) {
+				rs.close();
+				pstmt.close();
+				return false;
+			}
+
+			// 결과가 있을 경우 게시물 목록 출력
 			System.out.println("-------------------------------------------------------------------------------");
 			System.out.printf("%-4s %-15s %-30s %-10s %-20s\n", "no", "writer", "title", "hitcount", "createdat");
 			System.out.println("-------------------------------------------------------------------------------");
@@ -497,7 +510,6 @@ public class miniproject1_1 {
 				if (rs.getTimestamp("bcreatedat") != null) {
 					createdAt = rs.getTimestamp("bcreatedat").toLocalDateTime();
 				}
-
 				// 게시물 작성 시간을 문자열로 설정위함
 				String createdTimeStr = "null";
 
@@ -510,17 +522,18 @@ public class miniproject1_1 {
 						createdTimeStr = createdAt.format(dateFormatter);
 					}
 				}
-
 				System.out.printf("%-4d %-15s %-30s %-10d %-20s\n", rs.getInt("bno"), rs.getString("bwriter"),
 						rs.getString("btitle"), rs.getInt("bhitcount"), createdTimeStr);
 			}
-
 			System.out.println(
 					"----------------------------------------------------------------------------------------------------------------------------------");
+
 			rs.close();
 			pstmt.close();
+			return true; // 데이터가 존재함
 		} catch (Exception e) {
 			e.printStackTrace();
+			return false; // 오류 발생 시 데이터가 없다고 간주
 		}
 	}
 
@@ -529,7 +542,6 @@ public class miniproject1_1 {
 		try {
 			// 현재 시간 가져오기
 			Timestamp now = new Timestamp(System.currentTimeMillis());
-
 			// 사용자 로그아웃 시간 업데이트 처리
 			String sql = "UPDATE MEMBER SET mlastlogouttime = SYSDATE WHERE mid = ?";
 			PreparedStatement pstmt = conn.prepareStatement(sql);
@@ -546,7 +558,6 @@ public class miniproject1_1 {
 				System.out.println("로그아웃에 실패했습니다.");
 				System.out.println();
 			}
-
 			pstmt.close();
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -560,32 +571,78 @@ public class miniproject1_1 {
 	}
 
 	// 5.탈퇴 기능
-	public static void DeleteMember(String currentUser) {
-		String selectSql = "SELECT mid FROM member WHERE mid = ?";
-		String updateSql = "UPDATE member SET menabled = 0 WHERE mid = ?";
+	public static void DeleteMember(String mid, String mpassword) {
+		// 쿼리 정의
+		String selectPasswordSql = "SELECT mpassword FROM member WHERE mid = ?";
+		String updateMemberSql = "UPDATE member SET menabled = 0 WHERE mid = ?";
+		String getRoleSql = "SELECT mrole FROM member WHERE mid = ?";
 
-		try (PreparedStatement selectPstmt = conn.prepareStatement(selectSql);
-				PreparedStatement updatePstmt = conn.prepareStatement(updateSql);
+		try {
+			// 사용자 권한 조회
+			String userRole = "";
+			try (PreparedStatement getRolePstmt = conn.prepareStatement(getRoleSql)) {
+				getRolePstmt.setString(1, mid);
+				try (ResultSet getRoleRs = getRolePstmt.executeQuery()) {
+					if (getRoleRs.next()) {
+						userRole = getRoleRs.getString("mrole");
+					}
+				}
+			}
 
-		) {
-			selectPstmt.setString(1, currentUser);
-			try (ResultSet rs = selectPstmt.executeQuery()) {
-				if (rs.next()) {
-					updatePstmt.setString(1, currentUser);
+			// 비밀번호 확인 및 비활성화
+			if ("ROLE_ADMIN".equals(userRole)) {
+				// 관리자 권한으로 비밀번호 없이 비활성화
+				try (PreparedStatement updatePstmt = conn.prepareStatement(updateMemberSql)) {
+					updatePstmt.setString(1, mid);
 					int rowsUpdated = updatePstmt.executeUpdate();
 
 					if (rowsUpdated > 0) {
 						System.out.println("회원이 비활성화 되었습니다.");
+						conn.commit(); // 변경사항 커밋
 					} else {
 						System.out.println("회원 비활성화에 실패했습니다.");
 					}
-				} else {
-					System.out.println("회원을 찾을 수 없습니다.");
+				}
+			} else {
+				// 일반 사용자로 비밀번호 확인 후 비활성화
+				try (PreparedStatement selectPstmt = conn.prepareStatement(selectPasswordSql)) {
+					selectPstmt.setString(1, mid);
+					try (ResultSet rs = selectPstmt.executeQuery()) {
+						if (rs.next()) {
+							String storedPassword = rs.getString("mpassword");
+
+							// 비밀번호가 일치하는 경우 회원 비활성화
+							if (storedPassword.equals(mpassword)) {
+								try (PreparedStatement updatePstmt = conn.prepareStatement(updateMemberSql)) {
+									updatePstmt.setString(1, mid);
+									int rowsUpdated = updatePstmt.executeUpdate();
+
+									if (rowsUpdated > 0) {
+										System.out.println("회원이 비활성화 되었습니다.");
+										conn.commit(); // 변경사항 커밋
+									} else {
+										System.out.println("회원 비활성화에 실패했습니다.");
+									}
+								}
+							} else {
+								System.out.println("비밀번호가 일치하지 않습니다.");
+							}
+						} else {
+							System.out.println("회원을 찾을 수 없습니다.");
+						}
+					}
 				}
 			}
 		} catch (Exception e) {
 			System.out.println("SQL 오류 발생: " + e.getMessage());
 			e.printStackTrace();
+			try {
+				if (conn != null) {
+					conn.rollback(); // 롤백 추가
+				}
+			} catch (SQLException se) {
+				se.printStackTrace();
+			}
 		}
 	}
 
@@ -595,15 +652,23 @@ public class miniproject1_1 {
 		int pageSize = 10;
 
 		while (true) {
-			BoardRead(currentPage, pageSize);
+			boolean hasData = BoardRead(currentPage, pageSize);
+
+			if (!hasData && currentPage != 1) {
+				// 데이터가 없는 페이지로 이동하려는 경우
+				System.out.println("해당 페이지에는 게시물이 존재하지 않습니다. 이전 페이지로 돌아갑니다.");
+				currentPage--;
+				continue; // 현재 페이지에 머무름
+
+			}
 
 			System.out.println("현재 페이지: " + currentPage);
-			System.out.println("다음 페이지 (n), 이전 페이지(p), 페이지 번호 입력 (숫자), 종료(q)");
+			System.out.println("다음 페이지 (n), 이전 페이지 (p), 페이지 번호 입력 (숫자), 종료 (q)");
 			String selectNum = sc.nextLine();
 
-			if (selectNum.equals("n")) {
+			if (selectNum.equalsIgnoreCase("n")) {
 				currentPage++;
-			} else if (selectNum.equals("p")) {
+			} else if (selectNum.equalsIgnoreCase("p")) {
 				if (currentPage > 1) {
 					currentPage--;
 				} else {
@@ -616,40 +681,42 @@ public class miniproject1_1 {
 				} else {
 					System.out.println("올바른 페이지 번호를 입력해 주세요.");
 				}
-			} else if (selectNum.equals("q")) {
+			} else if (selectNum.equalsIgnoreCase("q")) {
 				break;
 			} else {
 				System.out.println("잘못된 입력입니다. 다시 시도해 주세요.");
 			}
 		}
 
-		System.out.println();
-		System.out.println("1. Create");
-		System.out.println("2. Read");
-		System.out.println("3. Clear");
-		System.out.println("4. Update");
-		System.out.println("5. Exit");
-		String selectNum = sc.nextLine();
+		while (true) {
+			System.out.println();
+			System.out.println("1. Create");
+			System.out.println("2. Read");
+			System.out.println("3. Clear");
+			System.out.println("4. Update");
+			System.out.println("5. Exit");
+			String selectNum = sc.nextLine();
 
-		switch (selectNum) {
-		case "1" -> {
-			System.out.print("제목: ");
-			String btitle = sc.nextLine();
-			System.out.print("작성자: ");
-			String bwriter = sc.nextLine();
-			System.out.print("내용: ");
-			String bcontent = sc.nextLine();
-			BoardInsert(currentUser, btitle, bwriter, bcontent);
-		}
-		case "2" -> {
-			System.out.print("상세보기 원하는 bno를 입력해주세요.");
-			int bno = Integer.parseInt(sc.nextLine());
-			BoardDetail(bno);
-		}
-		case "3" -> BoardDelete();
-		case "4" -> BoardUpdate();
-		case "5" -> exit();
-		default -> System.out.println("잘못된 입력입니다. 다시 입력해 주세요.");
+			switch (selectNum) {
+			case "1" -> {
+				System.out.print("제목: ");
+				String btitle = sc.nextLine();
+				System.out.print("작성자: ");
+				String bwriter = sc.nextLine();
+				System.out.print("내용: ");
+				String bcontent = sc.nextLine();
+				BoardInsert(currentUser, btitle, bwriter, bcontent);
+			}
+			case "2" -> {
+				System.out.print("상세보기 원하는 bno를 입력해주세요.");
+				int bno = Integer.parseInt(sc.nextLine());
+				BoardDetail(bno);
+			}
+			case "3" -> BoardDelete();
+			case "4" -> BoardUpdate();
+			case "5" -> exit();
+			default -> System.out.println("잘못된 입력입니다. 다시 입력해 주세요.");
+			}
 		}
 
 	}
@@ -663,12 +730,12 @@ public class miniproject1_1 {
 
 			if (rs.next()) {
 				System.out.println("[회원 목록]");
-				System.out.println("-------------------------------------------------------------");
-				System.out.printf("%-10s %-20s %15s %-20s\n", "아이디", "이름", "전화번호", "주소", "성별");
-				System.out.println("-------------------------------------------------------------");
+				System.out.println("-------------------------------------------------------------------");
+				System.out.printf("%-10s %-10s %-15s %-20s %-6s\n", "아이디", "이름", "전화번호", "주소", "성별");
+				System.out.println("-------------------------------------------------------------------");
 
 				while (rs.next()) {
-					System.out.printf("%-10s %-20s %-15s %-20s\n", rs.getString("mid"), rs.getString("mname"),
+					System.out.printf("%-10s %-10s %-15s %-20s %-6s\n", rs.getString("mid"), rs.getString("mname"),
 							rs.getString("mtel"), rs.getString("maddress"), rs.getString("mgender"));
 				}
 				rs.close();
@@ -700,7 +767,7 @@ public class miniproject1_1 {
 		}
 	}
 
-	// 6.비밀번호 초기화 기능(로그인 안되어있을 경우)
+	// 6.비밀번호 초기화 기능(비밀번호를 까먹은 경우)
 	public void resetPw(String mid, String mtel) {
 		try {
 			String selectSql = "SELECT mid FROM member WHERE mid = ? AND mtel = ?";
@@ -738,7 +805,7 @@ public class miniproject1_1 {
 		}
 	}
 
-	// 7.비밀번호 변경 (로그인시 까먹은 경우)
+	// 7.비밀번호 변경 (변경할 경우)
 	public static void loginRePassword(String mid, String mpassword) {
 		try {
 			// JDBC 드라이버 등록
@@ -747,30 +814,37 @@ public class miniproject1_1 {
 			// 데이터베이스 연결
 			conn = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521/xe", "user01", "1004");
 
-			String selectSql = "SELECT mid, mpassword FROM member WHERE mid = ?";
+			String selectSql = "SELECT mid FROM member WHERE mid = ? AND mpassword = ?";
 			PreparedStatement selectPstmt = conn.prepareStatement(selectSql);
 			selectPstmt.setString(1, mid);
+			selectPstmt.setString(2, mpassword);
 
 			ResultSet rs = selectPstmt.executeQuery();
 			if (rs.next()) {
-				System.out.print("새 비밀번호를 입력해 주세요.");
-				String resetMpassword = sc.nextLine();
+				if (currentUser.equals(mid)) {
+					System.out.print("새 비밀번호를 입력해 주세요.");
+					String resetMpassword = sc.nextLine();
 
-				// 비밀번호를 업데이트하는 쿼리
-				String updateSql = "UPDATE member SET mpassword = ? WHERE mid = ?";
-				PreparedStatement updatePstmt = conn.prepareStatement(updateSql);
-				updatePstmt.setString(1, resetMpassword);
-				updatePstmt.setString(2, mid);
+					// 비밀번호를 업데이트하는 쿼리
+					String updateSql = "UPDATE member SET mpassword = ? WHERE mid = ?";
+					PreparedStatement updatePstmt = conn.prepareStatement(updateSql);
+					updatePstmt.setString(1, resetMpassword);
+					updatePstmt.setString(2, mid);
 
-				int rowsUpdated = updatePstmt.executeUpdate();
-				if (rowsUpdated > 0) {
-					System.out.println("비밀번호를 변경하셨습니다.");
+					int rowsUpdated = updatePstmt.executeUpdate();
+					if (rowsUpdated > 0) {
+						System.out.println("비밀번호를 변경하셨습니다.");
+					} else {
+						System.out.println("비밀번호 변경을 실패하셨습니다.");
+					}
 				} else {
-					System.out.println("비밀번호 변경을 실패하셨습니다.");
+					System.out.println("본인 계정만 비밀번호를 변경할 수 있습니다.");
 				}
+
 			} else {
-				System.out.println("잘못된 요청입니다. 다시 시도해 주세요.");
+				System.out.println("아이디 또는 비밀번호가 일치하지 않습니다.");
 			}
+
 			rs.close();
 			selectPstmt.close();
 		} catch (Exception e) {
@@ -785,11 +859,16 @@ public class miniproject1_1 {
 
 	// 게시물 생성
 	public static void BoardInsert(String mid, String btitle, String bwriter, String bcontent) {
+		PreparedStatement pstmt = null;
 		try {
-			String sql = ""
-					+ "INSERT INTO board (bno, mid, btitle, bwriter, bcontent, bcreatedat, bupdatedat, bhitcount, benabled) "
+			if (conn == null || conn.isClosed()) {
+				System.out.println("DB 연결이 유효하지 않습니다.");
+				setupDatabase();
+			}
+
+			String sql = "INSERT INTO board (bno, mid, btitle, bwriter, bcontent, bcreatedat, bupdatedat, bhitcount, benabled) "
 					+ "VALUES (BNO_SEQ.NEXTVAL, ?, ?, ?, ?, ?, ?, ?, ?)";
-			PreparedStatement pstmt = conn.prepareStatement(sql);
+			pstmt = conn.prepareStatement(sql);
 			pstmt.setString(1, mid);
 			pstmt.setString(2, btitle);
 			pstmt.setString(3, bwriter);
@@ -804,14 +883,20 @@ public class miniproject1_1 {
 			int rowsAffected = pstmt.executeUpdate();
 			if (rowsAffected > 0) {
 				System.out.println("게시물이 생성되었습니다.");
-				System.out.println();
 			} else {
 				System.out.println("게시물이 생성되지 않았습니다.");
-				System.out.println();
 			}
-
 		} catch (Exception e) {
 			e.printStackTrace();
+		} finally {
+			try {
+				if (pstmt != null)
+					pstmt.close();
+				if (conn != null && !conn.isClosed())
+					conn.close();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 		}
 	}
 
@@ -829,7 +914,6 @@ public class miniproject1_1 {
 			String sql = "SELECT bno, mid, btitle, bwriter, bcontent, bcreatedat, bupdatedat, bhitcount FROM board WHERE bno = ? AND benabled = 1";
 			PreparedStatement pstmt = conn.prepareStatement(sql);
 			pstmt.setInt(1, bno);
-
 			ResultSet rs = pstmt.executeQuery();
 
 			if (rs.next()) {
@@ -881,6 +965,28 @@ public class miniproject1_1 {
 						rs.getString("bwriter"), rs.getString("btitle"), rs.getInt("bhitcount"), createdTimeStr,
 						updatedTimeStr, rs.getString("bcontent"));
 				System.out.println();
+
+				// 회원에서 권한을 가져오기 위함
+				String selectSql = "SELECT mrole FROM member WHERE mid = ?";
+				PreparedStatement selectPstmt = conn.prepareStatement(selectSql);
+				selectPstmt.setString(1, currentUser);
+				ResultSet selectRs = selectPstmt.executeQuery();
+				String userRole = "";
+				if (selectRs.next()) {
+					userRole = selectRs.getString("mrole");
+				}
+
+				// 본인이 작성한 게시물일 경우 수정, 삭제
+				if (rs.getString("mid").equals(currentUser) || "ROLE_ADMIN".equals(userRole)) {
+					System.out.println("1. 게시물 수정하기");
+					System.out.println("2. 게시물 삭제하기");
+					String selectNum = sc.nextLine();
+
+					switch (selectNum) {
+					case "1" -> BoardUpdate();
+					case "2" -> BoardDelete();
+					}
+				}
 			} else {
 				// 게시물이 존재하지 않을 때의 처리
 				System.out.println("해당 번호의 게시물이 존재하지 않습니다.");
@@ -893,10 +999,16 @@ public class miniproject1_1 {
 		}
 	}
 
-	// 게시물 수정 기능
+	// 사용자 권한 확인 및 비밀번호 필요 시 updateBoard() 메소드를 호출하여 게시물 수정 로직 메소드
 	public static void BoardUpdate() {
 		try {
-			System.out.print("수정할 게시물 번호를 입력해 주세요.");
+			// JDBC 드라이버 등록
+			Class.forName("oracle.jdbc.OracleDriver");
+
+			// 데이터베이스 연결
+			conn = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521/xe", "user01", "1004");
+
+			System.out.print("수정할 게시물 번호를 입력해 주세요: ");
 			int bno = Integer.parseInt(sc.nextLine());
 
 			// 작성자의 정보 가져오기
@@ -905,41 +1017,76 @@ public class miniproject1_1 {
 			getWriterPstmt.setInt(1, bno);
 			ResultSet rs = getWriterPstmt.executeQuery();
 
+			// 현재 사용자의 권한 및 비밀번호 가져오기
+			String selectSql = "SELECT mrole, mpassword FROM member WHERE mid = ?";
+			PreparedStatement selectPstmt = conn.prepareStatement(selectSql);
+			selectPstmt.setString(1, currentUser);
+			ResultSet selectRs = selectPstmt.executeQuery();
+			String userRole = "";
+			String userPassword = "";
+			if (selectRs.next()) {
+				userRole = selectRs.getString("mrole");
+				userPassword = selectRs.getString("mpassword");
+			}
+
 			if (rs.next()) {
-				String wirteId = rs.getString("mid");
-				// 로그인한 사용자와 비교
-				if (currentUser != null && currentUser.equals(wirteId)) {
-					System.out.println("새 제목: ");
-					String btitle = sc.nextLine();
-					System.out.println("새 내용: ");
-					String bcontent = sc.nextLine();
+				String writeId = rs.getString("mid");
 
-					// 현재 시간으로 수정일자 저장
-					Timestamp now = new Timestamp(System.currentTimeMillis());
+				// 로그인한 사용자와 작성자 비교
+				if ("ROLE_ADMIN".equals(userRole)) {
+					// 관리자는 비밀번호 없이 수정 가능
+					System.out.println("관리자 권한으로 수정합니다.");
+					updateBoard(bno);
+				} else if (currentUser != null && currentUser.equals(writeId)) {
+					// 일반 사용자는 비밀번호 확인 후 수정 가능
+					System.out.print("비밀번호를 입력해 주세요: ");
+					String inputPassword = sc.nextLine();
 
-					String sql = "UPDATE board SET btitle = ? , bcontent = ?, bupdatedat = ? WHERE bno = ? AND benabled = 1";
-					PreparedStatement pstmt = conn.prepareStatement(sql);
-					pstmt.setString(1, btitle);
-					pstmt.setString(2, bcontent);
-					pstmt.setTimestamp(3, now); // 수정 시간 기록
-					pstmt.setInt(4, bno);
-
-					int rowsAffected = pstmt.executeUpdate();
-					if (rowsAffected > 0) {
-						System.out.println("게시물이 수정되었습니다.");
+					if (inputPassword.equals(userPassword)) {
+						updateBoard(bno);
 					} else {
-						System.out.println("해당 번호의 게시물이 존재하지 않거나 수정할 수 없습니다.");
+						System.out.println("비밀번호가 일치하지 않습니다.");
 					}
-					pstmt.close();
 				} else {
-					System.out.println("본인이 작성한 게시물만 수정 가능 합니다.");
+					System.out.println("본인이 작성한 게시물만 수정할 수 있습니다.");
 				}
 			} else {
 				System.out.println("해당 번호의 게시물이 존재하지 않습니다.");
 			}
+
+			selectPstmt.close();
+			selectRs.close();
+			rs.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+	}
+
+	// 게시물 수정 로직을 별도로 메서드로 분리 ( 실제 게시물을 수정하는 로직 )
+	private static void updateBoard(int bno) throws SQLException {
+		System.out.println("새 제목: ");
+		String btitle = sc.nextLine();
+		System.out.println("새 내용: ");
+		String bcontent = sc.nextLine();
+
+		// 현재 시간으로 수정일자 저장
+		Timestamp now = new Timestamp(System.currentTimeMillis());
+
+		String sql = "UPDATE board SET btitle = ?, bcontent = ?, bupdatedat = ? WHERE bno = ? AND benabled = 1";
+		PreparedStatement pstmt = conn.prepareStatement(sql);
+		pstmt.setString(1, btitle);
+		pstmt.setString(2, bcontent);
+		pstmt.setTimestamp(3, now); // 수정 시간 기록
+		pstmt.setInt(4, bno);
+
+		int rowsAffected = pstmt.executeUpdate();
+		if (rowsAffected > 0) {
+			System.out.println("게시물이 수정되었습니다.");
+		} else {
+			System.out.println("해당 번호의 게시물이 존재하지 않거나 수정할 수 없습니다.");
+		}
+
+		pstmt.close();
 	}
 
 	// 게시물 비활성화(삭제) 기능
@@ -949,7 +1096,13 @@ public class miniproject1_1 {
 		int bno = Integer.parseInt(sc.nextLine());
 
 		try {
-			// 작성자 정보 가져오기
+			// JDBC 드라이버 등록
+			Class.forName("oracle.jdbc.OracleDriver");
+
+			// 데이터베이스 연결
+			conn = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521/xe", "user01", "1004");
+
+			// 작성자 ID 가져오기
 			String getWriterSql = "SELECT mid FROM board WHERE bno = ? AND benabled = 1";
 			PreparedStatement getWriterPstmt = conn.prepareStatement(getWriterSql);
 			getWriterPstmt.setInt(1, bno);
@@ -957,7 +1110,21 @@ public class miniproject1_1 {
 
 			if (rs.next()) {
 				String writeId = rs.getString("mid");
-				if (currentUser != null && currentUser.equals(writeId)) {
+
+				// 현재 사용자의 권한과 비밀번호 가져오기
+				String selectSql = "SELECT mrole, mpassword FROM member WHERE mid = ?";
+				PreparedStatement selectPstmt = conn.prepareStatement(selectSql);
+				selectPstmt.setString(1, currentUser);
+				ResultSet selectRs = selectPstmt.executeQuery();
+				String userRole = "";
+				String userPassword = "";
+				if (selectRs.next()) {
+					userRole = selectRs.getString("mrole");
+					userPassword = selectRs.getString("mpassword");
+				}
+
+				if ("ROLE_ADMIN".equals(userRole)) {
+					// 관리자는 비밀번호 없이 게시물 비활성화 가능
 					String sql = "UPDATE board SET benabled = 0 WHERE bno = ?";
 					PreparedStatement pstmt = conn.prepareStatement(sql);
 					pstmt.setInt(1, bno);
@@ -969,12 +1136,38 @@ public class miniproject1_1 {
 						System.out.println("게시물 비활성화에 실패했습니다.");
 					}
 					pstmt.close();
+				} else if (currentUser != null && currentUser.equals(writeId)) {
+					// 일반 사용자는 비밀번호 확인 후 비활성화 가능
+					System.out.print("비밀번호: ");
+					String inputPassword = sc.nextLine();
+
+					if (inputPassword.equals(userPassword)) {
+						String sql = "UPDATE board SET benabled = 0 WHERE bno = ?";
+						PreparedStatement pstmt = conn.prepareStatement(sql);
+						pstmt.setInt(1, bno);
+
+						int rowsAffected = pstmt.executeUpdate();
+						if (rowsAffected > 0) {
+							System.out.println("게시물이 비활성화 되었습니다.");
+						} else {
+							System.out.println("게시물 비활성화에 실패했습니다.");
+						}
+						pstmt.close();
+					} else {
+						System.out.println("비밀번호가 일치하지 않습니다.");
+					}
 				} else {
 					System.out.println("작성자만 삭제할 수 있습니다.");
 				}
+
+				rs.close();
+				selectPstmt.close();
+				selectRs.close();
 			} else {
 				System.out.println("해당 게시물 번호가 존재하지 않습니다.");
 			}
+
+			conn.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
