@@ -24,7 +24,9 @@ public class miniproject1_1 {
 	// 데이터베이스 연결 설정
 	public static void setupDatabase() {
 		try {
+			// JDBC드라이버 클래스를 메모리에 로드 - Oracle 데이터 베이스와 연결하기 위함
 			Class.forName("oracle.jdbc.OracleDriver");
+			// 데이터베이스 연결 메소드 - 데이터 베이스 서버주소, 포트번호, SID, 사용자명, 비밀번호
 			conn = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521/xe", "user01", "1004");
 			if (conn != null && !conn.isClosed()) {
 				System.out.println("DB 연결 성공");
@@ -70,6 +72,24 @@ public class miniproject1_1 {
 		}
 	}
 
+	// 아이디 중복확인
+	private boolean isIdDuplicate(String mid) {
+		try {
+			String sql = "SELECT COUNT(*) FROM member WHERE mid = ?";
+			PreparedStatement pstmt = conn.prepareStatement(sql);
+			pstmt.setString(1, mid);
+
+			ResultSet rs = pstmt.executeQuery();
+			if (rs.next()) {
+				int count = rs.getInt(1);
+				return count > 0; // count가 0보다 크면 중복된 아이디가 존재
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return false; // 중복되지 않음
+	}
+
 	// 회원가입 기능
 	public void signUp() {
 		System.out.println("회원 가입화면");
@@ -79,6 +99,13 @@ public class miniproject1_1 {
 		while (true) {
 			System.out.print("아이디: ");
 			mid = sc.nextLine();
+
+			// 아이디 중복 체크
+			if (isIdDuplicate(mid)) {
+				System.out.println("이미 존재하는 아이디 입니다. 다른 아이디를 입력해 주세요.");
+				continue;
+			}
+
 			boolean result = Pattern.matches(regMid, mid);
 			if (result) {
 				break; // 정규식에 맞으면 반복을 정료
@@ -154,9 +181,9 @@ public class miniproject1_1 {
 		String selectNo = sc.nextLine();
 
 		switch (selectNo) {
-		case "1" -> saveMember(mid, mpassword, mname, mtel, maddress, mgender);
-		case "2" -> signUp();
-		case "3" -> mainMenu();
+		case "1" -> saveMember(mid, mpassword, mname, mtel, maddress, mgender);// 아이디, 비번, 이름, 번호, 주소, 성별을 등록하여 회원가입
+		case "2" -> signUp(); // 다시 회원가입 받도록
+		case "3" -> mainMenu(); // 메인 메뉴로
 		default -> System.out.println("잘못된 입력입니다. 다시 시도해 주세요.");
 		}
 	}
@@ -167,7 +194,7 @@ public class miniproject1_1 {
 			String sql = ""
 					+ "INSERT INTO member (mid, mname, mpassword, mtel, maddress, mgender, mlastlogintime, mlastlogouttime, menabled) "
 					+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-			PreparedStatement pstmt = conn.prepareStatement(sql);
+			PreparedStatement pstmt = conn.prepareStatement(sql); // SQL쿼리를 파라미터로 설정하고 실행하는데 사용
 			pstmt.setString(1, mid);
 			pstmt.setString(2, mname);
 			pstmt.setString(3, mpassword);
@@ -178,7 +205,7 @@ public class miniproject1_1 {
 			pstmt.setTimestamp(8, null);
 			pstmt.setInt(9, 1);
 
-			int rowsAffected = pstmt.executeUpdate();
+			int rowsAffected = pstmt.executeUpdate(); // 쿼리를 실행 후 행 수를 반환 1개의 행이 반환됨
 			if (rowsAffected > 0) {
 				System.out.println("회원가입에 성공하셨습니다.");
 			}
@@ -209,6 +236,7 @@ public class miniproject1_1 {
 			}
 			case "2" -> {
 				// 사용자가 '다시입력'을 선택했으므로 아무 작업도 하지 않고 루프를 계속
+				System.out.println("다시 입력해 주세요.");
 			}
 			case "3" -> {
 				mainMenu();
@@ -286,8 +314,8 @@ public class miniproject1_1 {
 	// 사용자 메뉴
 	private void userMenu(String mrole) {
 		String selectNum = "";
-		int currentPage = 1;
-		int pageSize = 10;
+		int currentPage = 1; // 현재 페이지를 나타내는 변수
+		int pageSize = 10; // 페이지 당 표시할 데이터의 수
 		while (currentUser != null) {
 			// 메뉴 출력
 			if ("ROLE_ADMIN".equals(mrole)) {
@@ -336,10 +364,10 @@ public class miniproject1_1 {
 			}
 
 			case "1" -> {
-				selectMypage();
+				selectMypage(); // 나의 정보조회
 			}
 			case "2" -> {
-				pagiNation();
+				pagiNation(); //
 			}
 			case "3" -> {
 				if ("ROLE_ADMIN".equals(mrole)) {
@@ -1161,25 +1189,31 @@ public class miniproject1_1 {
 	    System.out.print("비밀번호: ");
 	    String inputMpassword = sc.nextLine();
 
-	    // 사용자 권한 가져오기
 	    String userRole = "";
+	    String dbPassword = ""; // 실제 데이터베이스에서 가져올 비밀번호
 
 	    try {
 	        // JDBC 드라이버 등록
-	    	Class.forName("oracle.jdbc.OracleDriver");
-	    	Connection conn = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521/xe", "user01", "1004");
+	        Class.forName("oracle.jdbc.OracleDriver");
+	        Connection conn = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521/xe", "user01", "1004");
 
 	        // 사용자 권한 가져오기
-	        String roleQuery = "SELECT mrole FROM member WHERE mid = ?";
+	        String roleQuery = "SELECT mrole, mpassword FROM member WHERE mid = ?";
 	        PreparedStatement roleStmt = conn.prepareStatement(roleQuery);
 	        roleStmt.setString(1, currentUser); // 현재 로그인된 사용자 ID를 설정
 	        ResultSet roleRs = roleStmt.executeQuery();
-
 	        if (roleRs.next()) {
 	            userRole = roleRs.getString("mrole");
+	            dbPassword = roleRs.getString("mpassword"); // 데이터베이스에서 비밀번호 가져오기
 	        }
 	        roleRs.close();
 	        roleStmt.close();
+
+	        // 비밀번호 검증
+	        if (!inputMpassword.equals(dbPassword)) {
+	            System.out.println("비밀번호가 일치하지 않습니다. 삭제를 중단합니다.");
+	            return; // 비밀번호가 틀리면 삭제 중단
+	        }
 
 	        // 저장 프로시저 호출
 	        java.sql.CallableStatement cstmt = conn.prepareCall("{call BoardDeleteProc(?, ?, ?, ?, ?)}");
@@ -1195,6 +1229,7 @@ public class miniproject1_1 {
 
 	        cstmt.close();
 	        conn.close();
+	        sc.close();
 	    } catch (Exception e) {
 	        e.printStackTrace();
 	    }
