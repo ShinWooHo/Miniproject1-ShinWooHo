@@ -1176,7 +1176,7 @@ public class miniproject1_1 {
 		} else {
 			System.out.println("해당 번호의 게시물이 존재하지 않거나 수정할 수 없습니다.");
 		}
-
+  
 		pstmt.close();
 	}
 
@@ -1229,7 +1229,6 @@ public class miniproject1_1 {
 
 	        cstmt.close();
 	        conn.close();
-	        sc.close();
 	    } catch (Exception e) {
 	        e.printStackTrace();
 	    }
