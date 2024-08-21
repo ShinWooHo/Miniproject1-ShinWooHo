@@ -1,1 +1,1 @@
-# Miniproject1-ShinWooHo
+# MSA7차 MiniProject1
